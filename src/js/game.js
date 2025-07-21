@@ -26,9 +26,16 @@ const player = {
   speed: 5,
   color: "#0099ff",
   bullets: [],
-  powerUpActive: false,
-  powerUpTimer: 0,
-  powerUpType: null,
+  powerUps: {
+    rapidFire: {
+      active: false,
+      timer: 0,
+    },
+    doubleDamage: {
+      active: false,
+      timer: 0,
+    },
+  },
   shootCooldown: 0,
   maxShootCooldown: 15,
   moving: {
@@ -75,18 +82,37 @@ const player = {
     ctx.closePath();
     ctx.fill();
 
-    // Power-up visual effect
-    if (this.powerUpActive) {
-      ctx.strokeStyle =
-        this.powerUpType === "rapidFire" ? "#ff00ff" : "#ffff00";
+    // Power-up visual effects
+    if (this.powerUps.rapidFire.active) {
+      // Draw rapid fire ring
+      const rapidFireProgress =
+        this.powerUps.rapidFire.timer / powerUpTypes[0].duration;
+      ctx.strokeStyle = "#ff00ff";
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(
         this.x + this.width / 2,
         this.y + this.height / 2,
         30,
-        0,
-        Math.PI * 2
+        -Math.PI / 2,
+        Math.PI * 2 * rapidFireProgress - Math.PI / 2
+      );
+      ctx.stroke();
+    }
+
+    if (this.powerUps.doubleDamage.active) {
+      // Draw double damage ring
+      const doubleDamageProgress =
+        this.powerUps.doubleDamage.timer / powerUpTypes[1].duration;
+      ctx.strokeStyle = "#ffff00";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(
+        this.x + this.width / 2,
+        this.y + this.height / 2,
+        35,
+        -Math.PI / 2,
+        Math.PI * 2 * doubleDamageProgress - Math.PI / 2
       );
       ctx.stroke();
     }
@@ -103,13 +129,29 @@ const player = {
     // Shooting cooldown
     if (this.shootCooldown > 0) this.shootCooldown--;
 
-    // Power-up timer
-    if (this.powerUpActive) {
-      this.powerUpTimer--;
-      if (this.powerUpTimer <= 0) {
-        this.powerUpActive = false;
-        this.powerUpType = null;
+    // Power-up timers
+    if (this.powerUps.rapidFire.active) {
+      this.powerUps.rapidFire.timer--;
+      document.getElementById("rapid-fire-indicator").classList.add("active");
+      if (this.powerUps.rapidFire.timer <= 0) {
+        this.powerUps.rapidFire.active = false;
         this.maxShootCooldown = 15;
+        document
+          .getElementById("rapid-fire-indicator")
+          .classList.remove("active");
+      }
+    }
+
+    if (this.powerUps.doubleDamage.active) {
+      this.powerUps.doubleDamage.timer--;
+      document
+        .getElementById("double-damage-indicator")
+        .classList.add("active");
+      if (this.powerUps.doubleDamage.timer <= 0) {
+        this.powerUps.doubleDamage.active = false;
+        document
+          .getElementById("double-damage-indicator")
+          .classList.remove("active");
       }
     }
   },
@@ -117,33 +159,30 @@ const player = {
     if (this.shootCooldown <= 0) {
       // Create new bullet
       this.bullets.push({
-        x: this.x + this.width / 2 - 2,
+        x: this.x + this.width / 2 - 4,
         y: this.y,
-        width: 4,
-        height: 15,
+        width: 8,
+        height: 20,
         speed: 10,
-        color:
-          this.powerUpActive && this.powerUpType === "doubleDamage"
-            ? "#ffff00"
-            : "#ffffff",
+        color: this.powerUps.doubleDamage.active ? "#ffff00" : "#ffffff",
       });
 
-      // If rapid fire power-up is active, add a second bullet
-      if (this.powerUpActive && this.powerUpType === "rapidFire") {
+      // If rapid fire power-up is active, add additional bullets
+      if (this.powerUps.rapidFire.active) {
         this.bullets.push({
-          x: this.x + this.width / 2 - 10,
+          x: this.x + this.width / 2 - 12,
           y: this.y + 10,
-          width: 4,
-          height: 15,
+          width: 8,
+          height: 20,
           speed: 10,
           color: "#ff00ff",
         });
 
         this.bullets.push({
-          x: this.x + this.width / 2 + 6,
+          x: this.x + this.width / 2 + 4,
           y: this.y + 10,
-          width: 4,
-          height: 15,
+          width: 8,
+          height: 20,
           speed: 10,
           color: "#ff00ff",
         });
@@ -164,17 +203,17 @@ const explosions = [];
 // Enemy types
 const enemyTypes = [
   {
-    name: "chicken",
+    name: "scout",
     width: 40,
     height: 40,
     speed: 2,
     health: 1,
     points: 10,
-    color: "#ff6666",
+    color: "#5599ff",
     shootRate: 0.005,
   },
   {
-    name: "boss",
+    name: "destroyer",
     width: 80,
     height: 80,
     speed: 1,
@@ -183,6 +222,16 @@ const enemyTypes = [
     color: "#ff0000",
     shootRate: 0.02,
   },
+  {
+    name: "mothership",
+    width: 100,
+    height: 60,
+    speed: 0.7,
+    health: 8,
+    points: 100,
+    color: "#9933ff",
+    shootRate: 0.03,
+  },
 ];
 
 // Power-up types
@@ -190,29 +239,27 @@ const powerUpTypes = [
   {
     name: "rapidFire",
     color: "#ff00ff",
-    duration: 300,
+    duration: 600, // Increased from 300
     effect() {
-      player.powerUpActive = true;
-      player.powerUpType = "rapidFire";
-      player.powerUpTimer = this.duration;
+      player.powerUps.rapidFire.active = true;
+      player.powerUps.rapidFire.timer = this.duration;
       player.maxShootCooldown = 5;
     },
   },
   {
     name: "doubleDamage",
     color: "#ffff00",
-    duration: 300,
+    duration: 600, // Increased from 300
     effect() {
-      player.powerUpActive = true;
-      player.powerUpType = "doubleDamage";
-      player.powerUpTimer = this.duration;
+      player.powerUps.doubleDamage.active = true;
+      player.powerUps.doubleDamage.timer = this.duration;
     },
   },
   {
     name: "healthBoost",
     color: "#00ff00",
     effect() {
-      playerHealth = Math.min(100, playerHealth + 20);
+      playerHealth = Math.min(100, playerHealth + 25); // Increased from 20
       updateHealthDisplay();
     },
   },
@@ -253,7 +300,20 @@ function updateStars() {
 
 // Create enemy
 function createEnemy() {
-  const randomEnemyType = Math.random() > 0.9 ? enemyTypes[1] : enemyTypes[0];
+  // Determine enemy type based on random chance and game level
+  let randomEnemyType;
+  const rand = Math.random();
+
+  if (rand > 0.95 && level >= 3) {
+    // 5% chance for mothership at level 3+
+    randomEnemyType = enemyTypes[2]; // mothership
+  } else if (rand > 0.85 && level >= 2) {
+    // 10% chance for destroyer at level 2+
+    randomEnemyType = enemyTypes[1]; // destroyer
+  } else {
+    // Default to scout
+    randomEnemyType = enemyTypes[0]; // scout
+  }
 
   enemies.push({
     x: Math.random() * (canvas.width - randomEnemyType.width),
@@ -293,34 +353,85 @@ function drawEnemies() {
   enemies.forEach((enemy) => {
     ctx.fillStyle = enemy.color;
 
-    if (enemy.type === "chicken") {
-      // Draw chicken body
+    if (enemy.type === "scout") {
+      // Draw alien scout ship (flying saucer)
+      // Main body
+      ctx.beginPath();
+      ctx.ellipse(
+        enemy.x + enemy.width / 2,
+        enemy.y + enemy.height / 2,
+        enemy.width / 2,
+        enemy.height / 4,
+        0,
+        0,
+        Math.PI * 2
+      );
+      ctx.fill();
+
+      // Top dome
+      ctx.fillStyle = "#88ccff";
       ctx.beginPath();
       ctx.arc(
         enemy.x + enemy.width / 2,
         enemy.y + enemy.height / 2,
-        enemy.width / 2,
+        enemy.width / 4,
         0,
-        Math.PI * 2
+        Math.PI,
+        true
       );
       ctx.fill();
 
-      // Draw chicken beak
-      ctx.fillStyle = "#ffcc00";
+      // Bottom lights
+      for (let i = 0; i < 3; i++) {
+        ctx.fillStyle = `hsl(${(gameFrame * 5 + i * 120) % 360}, 100%, 70%)`;
+        ctx.beginPath();
+        ctx.arc(
+          enemy.x + enemy.width * (0.3 + i * 0.2),
+          enemy.y + enemy.height * 0.7,
+          3,
+          0,
+          Math.PI * 2
+        );
+        ctx.fill();
+      }
+    } else if (enemy.type === "destroyer") {
+      // Draw alien destroyer (triangular warship)
+      // Main body
       ctx.beginPath();
-      ctx.moveTo(enemy.x + enemy.width / 2, enemy.y + enemy.height);
-      ctx.lineTo(enemy.x + enemy.width / 2 + 10, enemy.y + enemy.height + 15);
-      ctx.lineTo(enemy.x + enemy.width / 2 - 10, enemy.y + enemy.height + 15);
+      ctx.moveTo(enemy.x + enemy.width / 2, enemy.y);
+      ctx.lineTo(enemy.x + enemy.width, enemy.y + enemy.height * 0.8);
+      ctx.lineTo(enemy.x, enemy.y + enemy.height * 0.8);
       ctx.closePath();
       ctx.fill();
 
-      // Draw chicken eyes
-      ctx.fillStyle = "#000000";
+      // Engine glow
+      ctx.fillStyle = "#ff6600";
+      ctx.beginPath();
+      ctx.moveTo(enemy.x + enemy.width * 0.3, enemy.y + enemy.height * 0.8);
+      ctx.lineTo(enemy.x + enemy.width * 0.5, enemy.y + enemy.height);
+      ctx.lineTo(enemy.x + enemy.width * 0.7, enemy.y + enemy.height * 0.8);
+      ctx.closePath();
+      ctx.fill();
+
+      // Cockpit
+      ctx.fillStyle = "#333333";
       ctx.beginPath();
       ctx.arc(
-        enemy.x + enemy.width / 2 - 10,
-        enemy.y + enemy.height / 2 - 5,
-        5,
+        enemy.x + enemy.width / 2,
+        enemy.y + enemy.height / 3,
+        enemy.width / 6,
+        0,
+        Math.PI * 2
+      );
+      ctx.fill();
+
+      // Weapon pods
+      ctx.fillStyle = "#cc0000";
+      ctx.beginPath();
+      ctx.arc(
+        enemy.x + enemy.width * 0.25,
+        enemy.y + enemy.height * 0.5,
+        enemy.width / 10,
         0,
         Math.PI * 2
       );
@@ -328,83 +439,88 @@ function drawEnemies() {
 
       ctx.beginPath();
       ctx.arc(
-        enemy.x + enemy.width / 2 + 10,
-        enemy.y + enemy.height / 2 - 5,
-        5,
+        enemy.x + enemy.width * 0.75,
+        enemy.y + enemy.height * 0.5,
+        enemy.width / 10,
         0,
         Math.PI * 2
       );
       ctx.fill();
-    } else if (enemy.type === "boss") {
-      // Draw boss body
+    } else if (enemy.type === "mothership") {
+      // Draw alien mothership (large oval with details)
+      // Main body
+      ctx.beginPath();
+      ctx.ellipse(
+        enemy.x + enemy.width / 2,
+        enemy.y + enemy.height / 2,
+        enemy.width / 2,
+        enemy.height / 3,
+        0,
+        0,
+        Math.PI * 2
+      );
+      ctx.fill();
+
+      // Center dome
+      ctx.fillStyle = "#ccaaff";
       ctx.beginPath();
       ctx.arc(
         enemy.x + enemy.width / 2,
         enemy.y + enemy.height / 2,
-        enemy.width / 2,
+        enemy.width / 5,
         0,
         Math.PI * 2
       );
       ctx.fill();
 
-      // Draw boss crown
-      ctx.fillStyle = "#ffcc00";
+      // Pulsing energy ring
+      ctx.strokeStyle = `hsl(${gameFrame % 360}, 100%, 70%)`;
+      ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.moveTo(enemy.x + 10, enemy.y + 10);
-      ctx.lineTo(enemy.x + enemy.width / 2, enemy.y - 20);
-      ctx.lineTo(enemy.x + enemy.width - 10, enemy.y + 10);
-      ctx.closePath();
-      ctx.fill();
-
-      // Draw boss eyes
-      ctx.fillStyle = "#ffffff";
-      ctx.beginPath();
-      ctx.arc(
-        enemy.x + enemy.width / 2 - 15,
-        enemy.y + enemy.height / 2 - 5,
-        10,
+      ctx.ellipse(
+        enemy.x + enemy.width / 2,
+        enemy.y + enemy.height / 2,
+        enemy.width / 2 + Math.sin(gameFrame * 0.05) * 5,
+        enemy.height / 3 + Math.sin(gameFrame * 0.05) * 5,
+        0,
         0,
         Math.PI * 2
       );
-      ctx.fill();
+      ctx.stroke();
 
-      ctx.beginPath();
-      ctx.arc(
-        enemy.x + enemy.width / 2 + 15,
-        enemy.y + enemy.height / 2 - 5,
-        10,
-        0,
-        Math.PI * 2
-      );
-      ctx.fill();
-
-      // Draw boss pupils
-      ctx.fillStyle = "#000000";
-      ctx.beginPath();
-      ctx.arc(
-        enemy.x + enemy.width / 2 - 15,
-        enemy.y + enemy.height / 2 - 5,
-        5,
-        0,
-        Math.PI * 2
-      );
-      ctx.fill();
-
-      ctx.beginPath();
-      ctx.arc(
-        enemy.x + enemy.width / 2 + 15,
-        enemy.y + enemy.height / 2 - 5,
-        5,
-        0,
-        Math.PI * 2
-      );
-      ctx.fill();
+      // Bottom protrusions
+      for (let i = 0; i < 5; i++) {
+        ctx.fillStyle = "#7711aa";
+        ctx.beginPath();
+        ctx.rect(
+          enemy.x + enemy.width * (0.2 + i * 0.15),
+          enemy.y + enemy.height * 0.7,
+          enemy.width * 0.1,
+          enemy.height * 0.2
+        );
+        ctx.fill();
+      }
     }
 
     // Draw enemy bullets
     enemy.bullets.forEach((bullet) => {
-      ctx.fillStyle = "#ff6666";
+      // Add glow effect to enemy bullets
+      ctx.shadowColor = "#ff0000";
+      ctx.shadowBlur = 10;
+
+      // Different bullet colors based on enemy type
+      if (enemy.type === "scout") {
+        ctx.fillStyle = "#5599ff";
+      } else if (enemy.type === "destroyer") {
+        ctx.fillStyle = "#ff3333";
+      } else if (enemy.type === "mothership") {
+        ctx.fillStyle = "#cc33ff";
+      } else {
+        ctx.fillStyle = "#ff6666";
+      }
+
       ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+      ctx.shadowBlur = 0;
     });
   });
 }
@@ -423,30 +539,33 @@ function drawPowerUps() {
     );
     ctx.fill();
 
-    // Draw power-up icon
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "20px Arial";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-
-    let icon = "?";
-    if (powerUp.type === "rapidFire") icon = "R";
-    else if (powerUp.type === "doubleDamage") icon = "D";
-    else if (powerUp.type === "healthBoost") icon = "H";
-
-    ctx.fillText(
-      icon,
+    // Add a pulsing glow effect
+    ctx.strokeStyle = powerUp.color;
+    ctx.lineWidth = 2 + Math.sin(gameFrame * 0.1) * 2;
+    ctx.beginPath();
+    ctx.arc(
       powerUp.x + powerUp.width / 2,
-      powerUp.y + powerUp.height / 2
+      powerUp.y + powerUp.height / 2,
+      powerUp.width / 2 + 5,
+      0,
+      Math.PI * 2
     );
+    ctx.stroke();
   });
 }
 
 // Draw player bullets
 function drawPlayerBullets() {
   player.bullets.forEach((bullet) => {
+    // Add glow effect
+    ctx.shadowColor = bullet.color;
+    ctx.shadowBlur = 15;
+
     ctx.fillStyle = bullet.color;
     ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+
+    // Reset shadow for other drawings
+    ctx.shadowBlur = 0;
   });
 }
 
@@ -459,10 +578,10 @@ function updateEnemies() {
     // Enemy shooting
     if (Math.random() < enemy.shootRate) {
       enemy.bullets.push({
-        x: enemy.x + enemy.width / 2 - 2,
+        x: enemy.x + enemy.width / 2 - 4,
         y: enemy.y + enemy.height,
-        width: 4,
-        height: 10,
+        width: 8,
+        height: 15,
         speed: 5,
       });
     }
@@ -539,8 +658,7 @@ function updateEnemies() {
         bullet.y + bullet.height > enemy.y
       ) {
         // Enemy hit by bullet
-        const damage =
-          player.powerUpActive && player.powerUpType === "doubleDamage" ? 2 : 1;
+        const damage = player.powerUps.doubleDamage.active ? 2 : 1;
         enemy.health -= damage;
 
         // Remove bullet
@@ -701,9 +819,17 @@ function updateScoreDisplay() {
 
 // Update health display
 function updateHealthDisplay() {
-  document.getElementById(
-    "health-display"
-  ).textContent = `Health: ${playerHealth}%`;
+  const healthBar = document.getElementById("health-bar");
+  healthBar.style.width = `${playerHealth}%`;
+
+  // Change color based on health level
+  if (playerHealth > 60) {
+    healthBar.style.background = "linear-gradient(to right, #33cc33, #66ff66)";
+  } else if (playerHealth > 30) {
+    healthBar.style.background = "linear-gradient(to right, #ffcc00, #ffff66)";
+  } else {
+    healthBar.style.background = "linear-gradient(to right, #ff3333, #ff6666)";
+  }
 }
 
 // Game over
@@ -711,6 +837,33 @@ function gameOver() {
   gameActive = false;
   document.getElementById("game-over").style.display = "flex";
   document.getElementById("final-score").textContent = `Your score: ${score}`;
+}
+
+// Reset game variables
+function resetGame() {
+  score = 0;
+  playerHealth = 100;
+  level = 1;
+  enemySpawnRate = 120;
+  gameSpeed = 1;
+  gameFrame = 0;
+  enemies.length = 0;
+  powerUps.length = 0;
+  player.bullets.length = 0;
+  explosions.length = 0;
+  player.powerUps.rapidFire.active = false;
+  player.powerUps.rapidFire.timer = 0;
+  player.powerUps.doubleDamage.active = false;
+  player.powerUps.doubleDamage.timer = 0;
+  player.maxShootCooldown = 15;
+
+  // Reset UI indicators
+  document.getElementById("rapid-fire-indicator").classList.remove("active");
+  document.getElementById("double-damage-indicator").classList.remove("active");
+
+  // Update displays
+  updateScoreDisplay();
+  updateHealthDisplay();
 }
 
 // Main game loop
@@ -767,21 +920,8 @@ document.getElementById("start-button").addEventListener("click", () => {
   // Hide start screen
   document.getElementById("start-screen").style.display = "none";
 
-  // Reset game variables
-  score = 0;
-  playerHealth = 100;
-  level = 1;
-  enemySpawnRate = 120;
-  gameSpeed = 1;
-  gameFrame = 0;
-  enemies.length = 0;
-  powerUps.length = 0;
-  player.bullets.length = 0;
-  explosions.length = 0;
-
-  // Update displays
-  updateScoreDisplay();
-  updateHealthDisplay();
+  // Reset game
+  resetGame();
 
   // Start game
   gameActive = true;
@@ -792,21 +932,8 @@ document.getElementById("restart-button").addEventListener("click", () => {
   // Hide game over screen
   document.getElementById("game-over").style.display = "none";
 
-  // Reset game variables
-  score = 0;
-  playerHealth = 100;
-  level = 1;
-  enemySpawnRate = 120;
-  gameSpeed = 1;
-  gameFrame = 0;
-  enemies.length = 0;
-  powerUps.length = 0;
-  player.bullets.length = 0;
-  explosions.length = 0;
-
-  // Update displays
-  updateScoreDisplay();
-  updateHealthDisplay();
+  // Reset game
+  resetGame();
 
   // Start game
   gameActive = true;
