@@ -57,14 +57,49 @@
         background-color: #0099ff;
         transform: scale(1.1);
       }
-      #score-display {
+      #score-container {
         position: absolute;
         top: 10px;
         left: 10px;
         color: white;
         font-family: "Arial", sans-serif;
-        font-size: 1.2em;
         z-index: 5;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+
+      #score-display {
+        font-size: 1.2em;
+      }
+
+      #high-score-display {
+        font-size: 1em;
+        color: #ffcc00;
+      }
+
+      #high-score-message {
+        color: #ffcc00;
+        font-size: 1.8em;
+        text-shadow: 0 0 10px #ff9900;
+        margin-bottom: 20px;
+        animation: pulse-gold 1.5s infinite;
+        display: none;
+      }
+
+      @keyframes pulse-gold {
+        0% {
+          transform: scale(1);
+          text-shadow: 0 0 10px #ff9900;
+        }
+        50% {
+          transform: scale(1.1);
+          text-shadow: 0 0 20px #ff9900;
+        }
+        100% {
+          transform: scale(1);
+          text-shadow: 0 0 10px #ff9900;
+        }
       }
       #health-display {
         position: absolute;
@@ -176,12 +211,30 @@
           opacity: 1;
         }
       }
+      #reset-high-score {
+        padding: 10px 15px;
+        font-size: 1em;
+        background-color: #666666;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        margin-top: 15px;
+        transition: all 0.3s;
+      }
+
+      #reset-high-score:hover {
+        background-color: #888888;
+      }
     </style>
   </head>
   <body>
     <div id="game-container">
       <canvas id="gameCanvas"></canvas>
-      <div id="score-display">Score: 0</div>
+      <div id="score-container">
+        <div id="score-display">Score: 0</div>
+        <div id="high-score-display">High Score: 0</div>
+      </div>
       <div id="health-display">
         Health:
         <div id="health-bar-container"><div id="health-bar"></div></div>
@@ -204,8 +257,10 @@
 
       <div id="game-over">
         <h2>GAME OVER</h2>
+        <div id="high-score-message">NEW HIGH SCORE!</div>
         <div id="final-score">Your score: 0</div>
         <button id="restart-button">PLAY AGAIN</button>
+        <button id="reset-high-score">Reset High Score</button>
       </div>
     </div>
 

@@ -9,6 +9,7 @@ canvas.height = 600;
 // Game variables
 let gameActive = false;
 let score = 0;
+let highScore = 0;
 let playerHealth = 100;
 let level = 1;
 let enemySpawnRate = 120; // Frames between enemy spawns
@@ -16,6 +17,38 @@ let powerUpSpawnRate = 500; // Frames between power-up spawns
 let gameFrame = 0;
 let gameSpeed = 1;
 let backgroundY = 0;
+
+// Load high score from local storage
+function loadHighScore() {
+  const savedHighScore = localStorage.getItem("spaceDefenderHighScore");
+  if (savedHighScore !== null) {
+    highScore = parseInt(savedHighScore);
+  }
+  updateHighScoreDisplay();
+}
+
+// Save high score to local storage
+function saveHighScore() {
+  localStorage.setItem("spaceDefenderHighScore", highScore);
+}
+
+// Update high score if current score is higher
+function checkHighScore() {
+  if (score > highScore) {
+    highScore = score;
+    saveHighScore();
+    updateHighScoreDisplay();
+    return true;
+  }
+  return false;
+}
+
+// Reset high score
+function resetHighScore() {
+  highScore = 0;
+  saveHighScore();
+  updateHighScoreDisplay();
+}
 
 // Game objects
 const player = {
@@ -832,11 +865,32 @@ function updateHealthDisplay() {
   }
 }
 
+// Update high score display
+function updateHighScoreDisplay() {
+  document.getElementById(
+    "high-score-display"
+  ).textContent = `High Score: ${highScore}`;
+}
+
 // Game over
 function gameOver() {
   gameActive = false;
+
+  // Check for high score
+  const isNewHighScore = checkHighScore();
+
+  // Show game over screen
   document.getElementById("game-over").style.display = "flex";
   document.getElementById("final-score").textContent = `Your score: ${score}`;
+
+  // Show high score message if it's a new high score
+  const highScoreMessage = document.getElementById("high-score-message");
+  if (isNewHighScore) {
+    highScoreMessage.textContent = "NEW HIGH SCORE!";
+    highScoreMessage.style.display = "block";
+  } else {
+    highScoreMessage.style.display = "none";
+  }
 }
 
 // Reset game variables
@@ -940,6 +994,14 @@ document.getElementById("restart-button").addEventListener("click", () => {
   gameLoop();
 });
 
+document.getElementById("reset-high-score").addEventListener("click", () => {
+  // Reset high score
+  resetHighScore();
+
+  // Update high score message
+  document.getElementById("high-score-message").style.display = "none";
+});
+
 // Keyboard controls
 window.addEventListener("keydown", (e) => {
   switch (e.key) {
@@ -980,6 +1042,9 @@ window.addEventListener("keyup", (e) => {
 
 // Initialize stars
 createStars();
+
+// Load high score when the game starts
+loadHighScore();
 
 // Resize canvas when window resizes
 window.addEventListener("resize", () => {
