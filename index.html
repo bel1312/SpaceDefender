@@ -226,6 +226,113 @@
       #reset-high-score:hover {
         background-color: #888888;
       }
+      #combo-display {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: #ff00ff;
+        font-family: "Arial", sans-serif;
+        font-size: 1.5em;
+        font-weight: bold;
+        text-shadow: 0 0 10px #ff00ff;
+        z-index: 5;
+        display: none;
+        text-align: center;
+        animation: pulse-combo 0.5s infinite alternate;
+      }
+
+      @keyframes pulse-combo {
+        0% {
+          transform: translate(-50%, -50%) scale(1);
+        }
+        100% {
+          transform: translate(-50%, -50%) scale(1.1);
+        }
+      }
+      #level-display {
+        position: absolute;
+        bottom: 10px;
+        left: 10px;
+        color: #00ffff;
+        font-family: "Arial", sans-serif;
+        font-size: 1.2em;
+        z-index: 5;
+        text-shadow: 0 0 5px #00ffff;
+      }
+
+      .level-up {
+        animation: level-up-animation 2s forwards;
+      }
+
+      @keyframes level-up-animation {
+        0% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.5);
+          color: #ffff00;
+          text-shadow: 0 0 15px #ffff00;
+        }
+        100% {
+          transform: scale(1);
+        }
+      }
+      #damage-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 15;
+        opacity: 0;
+        transition: opacity 0.1s ease-in;
+        box-shadow: inset 0 0 100px 20px rgba(255, 0, 0, 0.8);
+      }
+
+      #damage-overlay.active {
+        opacity: 1;
+        animation: damage-pulse 0.5s forwards;
+      }
+
+      @keyframes damage-pulse {
+        0% {
+          opacity: 0.8;
+        }
+        100% {
+          opacity: 0;
+        }
+      }
+      #low-health-effect {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 14;
+        opacity: 0;
+        box-shadow: inset 0 0 100px 20px rgba(255, 0, 0, 0.5);
+        transition: opacity 0.5s ease;
+      }
+
+      #low-health-effect.active {
+        opacity: 1;
+        animation: heart-beat 1.5s infinite;
+      }
+
+      @keyframes heart-beat {
+        0% {
+          opacity: 0.3;
+        }
+        50% {
+          opacity: 0.7;
+        }
+        100% {
+          opacity: 0.3;
+        }
+      }
     </style>
   </head>
   <body>
@@ -249,6 +356,10 @@
           id="double-damage-indicator"
         ></div>
       </div>
+      <div id="combo-display">0x Combo</div>
+      <div id="level-display">Level: 1</div>
+      <div id="damage-overlay"></div>
+      <div id="low-health-effect"></div>
 
       <div id="start-screen">
         <h1>SPACE DEFENDER</h1>

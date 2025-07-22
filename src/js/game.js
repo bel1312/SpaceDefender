@@ -17,6 +17,84 @@ let powerUpSpawnRate = 500; // Frames between power-up spawns
 let gameFrame = 0;
 let gameSpeed = 1;
 let backgroundY = 0;
+let combo = 0;
+let comboTimer = 0;
+let comboMultiplier = 1;
+let screenShake = 0;
+
+// Background stars with parallax effect
+const backgroundLayers = [
+  {
+    stars: [],
+    count: 50,
+    size: [1, 2],
+    speed: 0.5,
+    color: "rgba(255, 255, 255, 0.5)",
+  },
+  {
+    stars: [],
+    count: 30,
+    size: [2, 3],
+    speed: 1,
+    color: "rgba(255, 255, 255, 0.7)",
+  },
+  {
+    stars: [],
+    count: 20,
+    size: [2, 4],
+    speed: 1.5,
+    color: "rgba(255, 255, 255, 0.9)",
+  },
+];
+
+// Create stars for each background layer
+function createBackgroundStars() {
+  backgroundLayers.forEach((layer) => {
+    for (let i = 0; i < layer.count; i++) {
+      layer.stars.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        size: Math.random() * (layer.size[1] - layer.size[0]) + layer.size[0],
+      });
+    }
+  });
+}
+
+// Draw background with parallax effect
+function drawBackground() {
+  // Clear canvas
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Apply screen shake
+  if (screenShake > 0) {
+    ctx.save();
+    const shakeX = (Math.random() - 0.5) * screenShake;
+    const shakeY = (Math.random() - 0.5) * screenShake;
+    ctx.translate(shakeX, shakeY);
+    screenShake -= 0.5;
+    if (screenShake < 0) screenShake = 0;
+  }
+
+  // Draw stars with parallax effect
+  backgroundLayers.forEach((layer) => {
+    ctx.fillStyle = layer.color;
+    layer.stars.forEach((star) => {
+      ctx.beginPath();
+      ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Move stars based on layer speed
+      star.y += layer.speed * gameSpeed;
+
+      // Reset stars that go off screen
+      if (star.y > canvas.height) {
+        star.y = 0;
+        star.x = Math.random() * canvas.width;
+      }
+    });
+  });
+}
 
 // Load high score from local storage
 function loadHighScore() {
@@ -642,6 +720,12 @@ function updateEnemies() {
         updateHealthDisplay();
         enemy.bullets.splice(j, 1);
 
+        // Add screen shake
+        screenShake = 5;
+
+        // Show damage effect
+        showDamageEffect();
+
         // Check if player is dead
         if (playerHealth <= 0) {
           gameOver();
@@ -652,6 +736,10 @@ function updateEnemies() {
     // Remove enemies that go off screen
     if (enemy.y > canvas.height) {
       enemies.splice(i, 1);
+      // Reset combo when enemy escapes
+      combo = 0;
+      comboMultiplier = 1;
+      document.getElementById("combo-display").style.display = "none";
       continue;
     }
 
@@ -668,6 +756,12 @@ function updateEnemies() {
 
       // Create explosion
       createExplosion(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
+
+      // Add screen shake
+      screenShake = 10;
+
+      // Show damage effect
+      showDamageEffect();
 
       // Remove enemy
       enemies.splice(i, 1);
@@ -699,8 +793,21 @@ function updateEnemies() {
 
         // Check if enemy is dead
         if (enemy.health <= 0) {
-          // Add points
-          score += enemy.points;
+          // Add points with combo multiplier
+          const pointsEarned = Math.round(enemy.points * comboMultiplier);
+          score += pointsEarned;
+
+          // Show floating score text
+          createFloatingText(
+            `+${pointsEarned}`,
+            enemy.x + enemy.width / 2,
+            enemy.y,
+            enemy.type
+          );
+
+          // Increment combo
+          addToCombo();
+
           updateScoreDisplay();
 
           // Create explosion
@@ -708,6 +815,15 @@ function updateEnemies() {
             enemy.x + enemy.width / 2,
             enemy.y + enemy.height / 2
           );
+
+          // Add screen shake based on enemy size
+          if (enemy.type === "mothership") {
+            screenShake = 15;
+          } else if (enemy.type === "destroyer") {
+            screenShake = 10;
+          } else {
+            screenShake = 5;
+          }
 
           // Remove enemy
           enemies.splice(i, 1);
@@ -842,6 +958,45 @@ function checkLevelUp() {
     level++;
     enemySpawnRate = Math.max(30, enemySpawnRate - 10);
     gameSpeed += 0.1;
+
+    // Update level display with animation
+    const levelDisplay = document.getElementById("level-display");
+    levelDisplay.textContent = `Level: ${level}`;
+    levelDisplay.classList.add("level-up");
+
+    // Create level up text
+    createFloatingText(
+      `LEVEL UP!`,
+      canvas.width / 2,
+      canvas.height / 2,
+      "mothership"
+    );
+
+    // Add screen shake for dramatic effect
+    screenShake = 10;
+
+    // Remove animation class after animation completes
+    setTimeout(() => {
+      levelDisplay.classList.remove("level-up");
+    }, 2000);
+
+    // Spawn power-up as level up reward
+    if (level % 2 === 0) {
+      // Every even level
+      const randomType =
+        powerUpTypes[Math.floor(Math.random() * powerUpTypes.length)];
+      powerUps.push({
+        x: Math.random() * (canvas.width - 30),
+        y: Math.random() * (canvas.height / 2) + canvas.height / 4,
+        width: 30,
+        height: 30,
+        speed: 0,
+        color: randomType.color,
+        type: randomType.name,
+        effect: randomType.effect,
+        duration: randomType.duration || 0,
+      });
+    }
   }
 }
 
@@ -858,11 +1013,26 @@ function updateHealthDisplay() {
   // Change color based on health level
   if (playerHealth > 60) {
     healthBar.style.background = "linear-gradient(to right, #33cc33, #66ff66)";
+    document.getElementById("low-health-effect").classList.remove("active");
   } else if (playerHealth > 30) {
     healthBar.style.background = "linear-gradient(to right, #ffcc00, #ffff66)";
+    document.getElementById("low-health-effect").classList.remove("active");
   } else {
     healthBar.style.background = "linear-gradient(to right, #ff3333, #ff6666)";
+    // Activate low health effect when health is below 30%
+    document.getElementById("low-health-effect").classList.add("active");
   }
+}
+
+// Show damage effect
+function showDamageEffect() {
+  const damageOverlay = document.getElementById("damage-overlay");
+  damageOverlay.classList.remove("active");
+
+  // Force browser to recognize the removal before adding again
+  void damageOverlay.offsetWidth;
+
+  damageOverlay.classList.add("active");
 }
 
 // Update high score display
@@ -893,6 +1063,86 @@ function gameOver() {
   }
 }
 
+// Floating text for score display
+const floatingTexts = [];
+
+function createFloatingText(text, x, y, enemyType) {
+  let color = "#ffffff";
+
+  // Different colors based on enemy type
+  if (enemyType === "mothership") {
+    color = "#ff00ff";
+  } else if (enemyType === "destroyer") {
+    color = "#ff9900";
+  } else {
+    color = "#ffffff";
+  }
+
+  floatingTexts.push({
+    text,
+    x,
+    y,
+    color,
+    size: enemyType === "mothership" ? 24 : enemyType === "destroyer" ? 20 : 16,
+    alpha: 1,
+    velocity: -2,
+  });
+}
+
+function updateFloatingTexts() {
+  for (let i = floatingTexts.length - 1; i >= 0; i--) {
+    const text = floatingTexts[i];
+    text.y += text.velocity;
+    text.alpha -= 0.02;
+
+    if (text.alpha <= 0) {
+      floatingTexts.splice(i, 1);
+    }
+  }
+}
+
+function drawFloatingTexts() {
+  floatingTexts.forEach((text) => {
+    ctx.fillStyle = text.color
+      .replace(")", `, ${text.alpha})`)
+      .replace("rgb", "rgba");
+    ctx.font = `bold ${text.size}px Arial`;
+    ctx.textAlign = "center";
+    ctx.fillText(text.text, text.x, text.y);
+  });
+}
+
+// Update combo
+function updateCombo() {
+  if (combo > 0) {
+    comboTimer--;
+    if (comboTimer <= 0) {
+      // Reset combo if timer runs out
+      combo = 0;
+      comboMultiplier = 1;
+      document.getElementById("combo-display").style.display = "none";
+    } else {
+      // Update combo display
+      document.getElementById(
+        "combo-display"
+      ).textContent = `${combo}x Combo (${comboMultiplier.toFixed(1)}x Points)`;
+      document.getElementById("combo-display").style.display = "block";
+    }
+  }
+}
+
+// Add to combo
+function addToCombo() {
+  combo++;
+  comboTimer = 120; // 2 seconds at 60fps
+
+  // Increase multiplier (capped at 5.0)
+  comboMultiplier = Math.min(5.0, 1 + combo * 0.1);
+
+  // Update combo display
+  updateCombo();
+}
+
 // Reset game variables
 function resetGame() {
   score = 0;
@@ -905,15 +1155,25 @@ function resetGame() {
   powerUps.length = 0;
   player.bullets.length = 0;
   explosions.length = 0;
+  floatingTexts.length = 0;
   player.powerUps.rapidFire.active = false;
   player.powerUps.rapidFire.timer = 0;
   player.powerUps.doubleDamage.active = false;
   player.powerUps.doubleDamage.timer = 0;
   player.maxShootCooldown = 15;
+  combo = 0;
+  comboTimer = 0;
+  comboMultiplier = 1;
+  screenShake = 0;
 
   // Reset UI indicators
   document.getElementById("rapid-fire-indicator").classList.remove("active");
   document.getElementById("double-damage-indicator").classList.remove("active");
+  document.getElementById("combo-display").style.display = "none";
+  document.getElementById("level-display").textContent = `Level: ${level}`;
+  document.getElementById("level-display").classList.remove("level-up");
+  document.getElementById("damage-overlay").classList.remove("active");
+  document.getElementById("low-health-effect").classList.remove("active");
 
   // Update displays
   updateScoreDisplay();
@@ -924,13 +1184,11 @@ function resetGame() {
 function gameLoop() {
   if (!gameActive) return;
 
-  // Clear canvas
-  ctx.fillStyle = "#000";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  // Draw background
+  drawBackground();
 
-  // Update and draw stars
-  updateStars();
-  drawStars();
+  // Update combo
+  updateCombo();
 
   // Spawn enemies
   if (gameFrame % enemySpawnRate === 0) {
@@ -961,6 +1219,15 @@ function gameLoop() {
   // Update and draw explosions
   updateExplosions();
   drawExplosions();
+
+  // Update and draw floating texts
+  updateFloatingTexts();
+  drawFloatingTexts();
+
+  // Reset screen shake transform if active
+  if (screenShake > 0) {
+    ctx.restore();
+  }
 
   // Increment game frame
   gameFrame++;
@@ -1042,6 +1309,7 @@ window.addEventListener("keyup", (e) => {
 
 // Initialize stars
 createStars();
+createBackgroundStars();
 
 // Load high score when the game starts
 loadHighScore();
