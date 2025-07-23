@@ -21,6 +21,332 @@ let combo = 0;
 let comboTimer = 0;
 let comboMultiplier = 1;
 let screenShake = 0;
+let bossActive = false;
+let bossWarningActive = false;
+let bossSpawnTimer = 0;
+let soundEnabled = true;
+
+// Sound elements and management
+const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+const soundBuffers = {};
+
+// Sound management system
+const SoundManager = {
+  init() {
+    // Set up sound toggle button
+    document.getElementById("sound-toggle").textContent = `Sound: ${
+      soundEnabled ? "ON" : "OFF"
+    }`;
+
+    // Create simple sounds programmatically instead of using audio files
+    this.createSounds();
+
+    console.log("Sound system initialized");
+  },
+
+  createSounds() {
+    // Create laser sound (high-pitched beep)
+    this.createBeepSound("laser", 880, 0.1, "square");
+
+    // Create explosion sound (noise burst)
+    this.createNoiseSound("explosion", 0.3);
+
+    // Create powerup sound (ascending tone)
+    this.createSweepSound("powerup", 440, 880, 0.3);
+
+    // Create hit sound (short low beep)
+    this.createBeepSound("hit", 220, 0.1, "sawtooth");
+
+    // Create game over sound (descending tone)
+    this.createSweepSound("gameOver", 440, 110, 0.5);
+
+    // Create level up sound (ascending arpeggio)
+    this.createArpeggioSound("levelUp");
+
+    // Create boss warning sound (alarm-like sound)
+    this.createAlarmSound("bossWarning");
+
+    // Create background music (simple looping pattern)
+    this.createBackgroundMusic();
+  },
+
+  createBeepSound(name, frequency, duration, type = "sine") {
+    soundBuffers[name] = () => {
+      if (!soundEnabled) return;
+
+      try {
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        oscillator.type = type;
+        oscillator.frequency.setValueAtTime(
+          frequency,
+          audioContext.currentTime
+        );
+
+        gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(
+          0.01,
+          audioContext.currentTime + duration
+        );
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        oscillator.start();
+        oscillator.stop(audioContext.currentTime + duration);
+      } catch (error) {
+        console.log(`Error playing ${name} sound:`, error);
+      }
+    };
+  },
+
+  createNoiseSound(name, duration) {
+    soundBuffers[name] = () => {
+      if (!soundEnabled) return;
+
+      try {
+        const bufferSize = audioContext.sampleRate * duration;
+        const buffer = audioContext.createBuffer(
+          1,
+          bufferSize,
+          audioContext.sampleRate
+        );
+        const data = buffer.getChannelData(0);
+
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+
+        const noise = audioContext.createBufferSource();
+        noise.buffer = buffer;
+
+        const gainNode = audioContext.createGain();
+        gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(
+          0.01,
+          audioContext.currentTime + duration
+        );
+
+        noise.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        noise.start();
+        noise.stop(audioContext.currentTime + duration);
+      } catch (error) {
+        console.log(`Error playing ${name} sound:`, error);
+      }
+    };
+  },
+
+  createSweepSound(name, startFreq, endFreq, duration) {
+    soundBuffers[name] = () => {
+      if (!soundEnabled) return;
+
+      try {
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        oscillator.type = "sine";
+        oscillator.frequency.setValueAtTime(
+          startFreq,
+          audioContext.currentTime
+        );
+        oscillator.frequency.exponentialRampToValueAtTime(
+          endFreq,
+          audioContext.currentTime + duration
+        );
+
+        gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(
+          0.01,
+          audioContext.currentTime + duration
+        );
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        oscillator.start();
+        oscillator.stop(audioContext.currentTime + duration);
+      } catch (error) {
+        console.log(`Error playing ${name} sound:`, error);
+      }
+    };
+  },
+
+  createArpeggioSound(name) {
+    soundBuffers[name] = () => {
+      if (!soundEnabled) return;
+
+      try {
+        const notes = [261.63, 329.63, 392.0, 523.25]; // C4, E4, G4, C5
+        const duration = 0.15;
+
+        notes.forEach((freq, i) => {
+          const oscillator = audioContext.createOscillator();
+          const gainNode = audioContext.createGain();
+
+          oscillator.type = "sine";
+          oscillator.frequency.value = freq;
+
+          gainNode.gain.setValueAtTime(
+            0.4,
+            audioContext.currentTime + i * duration
+          );
+          gainNode.gain.exponentialRampToValueAtTime(
+            0.01,
+            audioContext.currentTime + (i + 1) * duration
+          );
+
+          oscillator.connect(gainNode);
+          gainNode.connect(audioContext.destination);
+
+          oscillator.start(audioContext.currentTime + i * duration);
+          oscillator.stop(audioContext.currentTime + (i + 1) * duration);
+        });
+      } catch (error) {
+        console.log(`Error playing ${name} sound:`, error);
+      }
+    };
+  },
+
+  createAlarmSound(name) {
+    soundBuffers[name] = () => {
+      if (!soundEnabled) return;
+
+      try {
+        for (let i = 0; i < 3; i++) {
+          const oscillator = audioContext.createOscillator();
+          const gainNode = audioContext.createGain();
+
+          oscillator.type = "square";
+          oscillator.frequency.value = 440;
+
+          gainNode.gain.setValueAtTime(0.4, audioContext.currentTime + i * 0.4);
+          gainNode.gain.exponentialRampToValueAtTime(
+            0.01,
+            audioContext.currentTime + i * 0.4 + 0.2
+          );
+
+          oscillator.connect(gainNode);
+          gainNode.connect(audioContext.destination);
+
+          oscillator.start(audioContext.currentTime + i * 0.4);
+          oscillator.stop(audioContext.currentTime + i * 0.4 + 0.2);
+        }
+      } catch (error) {
+        console.log(`Error playing ${name} sound:`, error);
+      }
+    };
+  },
+
+  createBackgroundMusic() {
+    // Simple background music pattern
+    let isPlaying = false;
+    let intervalId = null;
+
+    soundBuffers.backgroundMusic = {
+      play() {
+        if (!soundEnabled || isPlaying) return;
+
+        isPlaying = true;
+        const notes = [261.63, 329.63, 392.0, 329.63]; // C4, E4, G4, E4
+        let index = 0;
+
+        intervalId = setInterval(() => {
+          if (!soundEnabled) {
+            this.stop();
+            return;
+          }
+
+          try {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.type = "sine";
+            oscillator.frequency.value = notes[index % notes.length];
+
+            gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(
+              0.01,
+              audioContext.currentTime + 0.3
+            );
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            oscillator.start();
+            oscillator.stop(audioContext.currentTime + 0.3);
+
+            index++;
+          } catch (error) {
+            console.log("Error playing background music:", error);
+          }
+        }, 400);
+      },
+
+      stop() {
+        isPlaying = false;
+        if (intervalId !== null) {
+          clearInterval(intervalId);
+          intervalId = null;
+        }
+      },
+    };
+  },
+
+  play(soundName) {
+    if (!soundEnabled || !soundBuffers[soundName]) return;
+
+    // Resume audio context if it's suspended (needed for Chrome's autoplay policy)
+    if (audioContext.state === "suspended") {
+      audioContext.resume();
+    }
+
+    // Play the sound
+    if (typeof soundBuffers[soundName] === "function") {
+      soundBuffers[soundName]();
+    } else if (soundBuffers[soundName].play) {
+      soundBuffers[soundName].play();
+    }
+  },
+
+  toggle() {
+    soundEnabled = !soundEnabled;
+    document.getElementById("sound-toggle").textContent = `Sound: ${
+      soundEnabled ? "ON" : "OFF"
+    }`;
+
+    if (soundEnabled) {
+      if (gameActive) {
+        this.play("backgroundMusic");
+      }
+    } else {
+      if (soundBuffers.backgroundMusic && soundBuffers.backgroundMusic.stop) {
+        soundBuffers.backgroundMusic.stop();
+      }
+    }
+  },
+};
+
+// Function to play a sound
+function playSound(name) {
+  SoundManager.play(name);
+}
+
+// Create a function to show damage indicators
+function showDamageIndicator(x, y, damage) {
+  // Create floating damage text
+  floatingTexts.push({
+    text: `-${damage}`,
+    x,
+    y,
+    color: "#ff6666",
+    size: 16,
+    alpha: 1,
+    velocity: -2,
+  });
+}
 
 // Background stars with parallax effect
 const backgroundLayers = [
@@ -268,6 +594,9 @@ const player = {
   },
   shoot() {
     if (this.shootCooldown <= 0) {
+      // Play laser sound
+      playSound("laser");
+
       // Create new bullet
       this.bullets.push({
         x: this.x + this.width / 2 - 4,
@@ -355,6 +684,20 @@ const powerUpTypes = [
       player.powerUps.rapidFire.active = true;
       player.powerUps.rapidFire.timer = this.duration;
       player.maxShootCooldown = 5;
+
+      // Show indicator
+      document.getElementById("rapid-fire-indicator").classList.add("active");
+
+      // Play power-up sound
+      playSound("powerup");
+
+      // Visual feedback that power-up is activated
+      createFloatingText(
+        "RAPID FIRE!",
+        player.x + player.width / 2,
+        player.y - 20,
+        "mothership"
+      );
     },
   },
   {
@@ -364,14 +707,50 @@ const powerUpTypes = [
     effect() {
       player.powerUps.doubleDamage.active = true;
       player.powerUps.doubleDamage.timer = this.duration;
+
+      // Show indicator
+      document
+        .getElementById("double-damage-indicator")
+        .classList.add("active");
+
+      // Play power-up sound
+      playSound("powerup");
+
+      // Visual feedback that power-up is activated
+      createFloatingText(
+        "DAMAGE BOOST x2!",
+        player.x + player.width / 2,
+        player.y - 20,
+        "mothership"
+      );
     },
   },
   {
     name: "healthBoost",
     color: "#00ff00",
     effect() {
+      const oldHealth = playerHealth;
       playerHealth = Math.min(100, playerHealth + 25); // Increased from 20
       updateHealthDisplay();
+
+      // Show indicator briefly
+      document.getElementById("health-boost-indicator").classList.add("active");
+      setTimeout(() => {
+        document
+          .getElementById("health-boost-indicator")
+          .classList.remove("active");
+      }, 2000);
+
+      // Play power-up sound
+      playSound("powerup");
+
+      // Visual feedback for health boost
+      createFloatingText(
+        `+${playerHealth - oldHealth} HEALTH!`,
+        player.x + player.width / 2,
+        player.y - 20,
+        "mothership"
+      );
     },
   },
 ];
@@ -438,6 +817,7 @@ function createEnemy() {
     shootRate: randomEnemyType.shootRate,
     bullets: [],
     type: randomEnemyType.name,
+    flashTimer: 0, // Add flash timer for hit effect
   });
 }
 
@@ -461,8 +841,19 @@ function createPowerUp() {
 
 // Draw enemies
 function drawEnemies() {
+  // Draw boss if active
+  if (bossActive) {
+    boss.draw();
+    return;
+  }
+
   enemies.forEach((enemy) => {
-    ctx.fillStyle = enemy.color;
+    // Use flash effect when enemy is hit
+    if (enemy.flashTimer > 0) {
+      ctx.fillStyle = "#ffffff";
+    } else {
+      ctx.fillStyle = enemy.color;
+    }
 
     if (enemy.type === "scout") {
       // Draw alien scout ship (flying saucer)
@@ -480,7 +871,7 @@ function drawEnemies() {
       ctx.fill();
 
       // Top dome
-      ctx.fillStyle = "#88ccff";
+      ctx.fillStyle = enemy.flashTimer > 0 ? "#ffffff" : "#88ccff";
       ctx.beginPath();
       ctx.arc(
         enemy.x + enemy.width / 2,
@@ -494,7 +885,10 @@ function drawEnemies() {
 
       // Bottom lights
       for (let i = 0; i < 3; i++) {
-        ctx.fillStyle = `hsl(${(gameFrame * 5 + i * 120) % 360}, 100%, 70%)`;
+        ctx.fillStyle =
+          enemy.flashTimer > 0
+            ? "#ffffff"
+            : `hsl(${(gameFrame * 5 + i * 120) % 360}, 100%, 70%)`;
         ctx.beginPath();
         ctx.arc(
           enemy.x + enemy.width * (0.3 + i * 0.2),
@@ -516,7 +910,7 @@ function drawEnemies() {
       ctx.fill();
 
       // Engine glow
-      ctx.fillStyle = "#ff6600";
+      ctx.fillStyle = enemy.flashTimer > 0 ? "#ffffff" : "#ff6600";
       ctx.beginPath();
       ctx.moveTo(enemy.x + enemy.width * 0.3, enemy.y + enemy.height * 0.8);
       ctx.lineTo(enemy.x + enemy.width * 0.5, enemy.y + enemy.height);
@@ -525,7 +919,7 @@ function drawEnemies() {
       ctx.fill();
 
       // Cockpit
-      ctx.fillStyle = "#333333";
+      ctx.fillStyle = enemy.flashTimer > 0 ? "#ffffff" : "#333333";
       ctx.beginPath();
       ctx.arc(
         enemy.x + enemy.width / 2,
@@ -537,7 +931,7 @@ function drawEnemies() {
       ctx.fill();
 
       // Weapon pods
-      ctx.fillStyle = "#cc0000";
+      ctx.fillStyle = enemy.flashTimer > 0 ? "#ffffff" : "#cc0000";
       ctx.beginPath();
       ctx.arc(
         enemy.x + enemy.width * 0.25,
@@ -557,6 +951,18 @@ function drawEnemies() {
         Math.PI * 2
       );
       ctx.fill();
+
+      // Draw health bar for destroyer
+      const healthPercent = enemy.health / enemyTypes[1].health;
+      ctx.fillStyle = "#333";
+      ctx.fillRect(enemy.x, enemy.y - 10, enemy.width, 5);
+      ctx.fillStyle =
+        healthPercent > 0.6
+          ? "#00ff00"
+          : healthPercent > 0.3
+          ? "#ffff00"
+          : "#ff0000";
+      ctx.fillRect(enemy.x, enemy.y - 10, enemy.width * healthPercent, 5);
     } else if (enemy.type === "mothership") {
       // Draw alien mothership (large oval with details)
       // Main body
@@ -573,7 +979,7 @@ function drawEnemies() {
       ctx.fill();
 
       // Center dome
-      ctx.fillStyle = "#ccaaff";
+      ctx.fillStyle = enemy.flashTimer > 0 ? "#ffffff" : "#ccaaff";
       ctx.beginPath();
       ctx.arc(
         enemy.x + enemy.width / 2,
@@ -585,7 +991,8 @@ function drawEnemies() {
       ctx.fill();
 
       // Pulsing energy ring
-      ctx.strokeStyle = `hsl(${gameFrame % 360}, 100%, 70%)`;
+      ctx.strokeStyle =
+        enemy.flashTimer > 0 ? "#ffffff" : `hsl(${gameFrame % 360}, 100%, 70%)`;
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.ellipse(
@@ -601,7 +1008,7 @@ function drawEnemies() {
 
       // Bottom protrusions
       for (let i = 0; i < 5; i++) {
-        ctx.fillStyle = "#7711aa";
+        ctx.fillStyle = enemy.flashTimer > 0 ? "#ffffff" : "#7711aa";
         ctx.beginPath();
         ctx.rect(
           enemy.x + enemy.width * (0.2 + i * 0.15),
@@ -611,6 +1018,18 @@ function drawEnemies() {
         );
         ctx.fill();
       }
+
+      // Draw health bar for mothership
+      const healthPercent = enemy.health / enemyTypes[2].health;
+      ctx.fillStyle = "#333";
+      ctx.fillRect(enemy.x, enemy.y - 15, enemy.width, 8);
+      ctx.fillStyle =
+        healthPercent > 0.6
+          ? "#00ff00"
+          : healthPercent > 0.3
+          ? "#ffff00"
+          : "#ff0000";
+      ctx.fillRect(enemy.x, enemy.y - 15, enemy.width * healthPercent, 8);
     }
 
     // Draw enemy bullets
@@ -672,8 +1091,23 @@ function drawPlayerBullets() {
     ctx.shadowColor = bullet.color;
     ctx.shadowBlur = 15;
 
-    ctx.fillStyle = bullet.color;
-    ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+    // Make double damage bullets larger and more impressive
+    if (player.powerUps.doubleDamage.active) {
+      ctx.shadowBlur = 20;
+      ctx.beginPath();
+      ctx.arc(
+        bullet.x + bullet.width / 2,
+        bullet.y + bullet.height / 2,
+        bullet.width,
+        0,
+        Math.PI * 2
+      );
+      ctx.fillStyle = bullet.color;
+      ctx.fill();
+    } else {
+      ctx.fillStyle = bullet.color;
+      ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+    }
 
     // Reset shadow for other drawings
     ctx.shadowBlur = 0;
@@ -682,6 +1116,12 @@ function drawPlayerBullets() {
 
 // Update enemies
 function updateEnemies() {
+  // Skip regular enemy updates if boss is active
+  if (bossActive) {
+    boss.update();
+    return;
+  }
+
   for (let i = enemies.length - 1; i >= 0; i--) {
     const enemy = enemies[i];
     enemy.y += enemy.speed * gameSpeed;
@@ -723,6 +1163,9 @@ function updateEnemies() {
         // Add screen shake
         screenShake = 5;
 
+        // Play hit sound
+        playSound("hit");
+
         // Show damage effect
         showDamageEffect();
 
@@ -756,6 +1199,9 @@ function updateEnemies() {
 
       // Create explosion
       createExplosion(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
+
+      // Play explosion sound
+      playSound("explosion");
 
       // Add screen shake
       screenShake = 10;
@@ -816,6 +1262,9 @@ function updateEnemies() {
             enemy.y + enemy.height / 2
           );
 
+          // Play explosion sound
+          playSound("explosion");
+
           // Add screen shake based on enemy size
           if (enemy.type === "mothership") {
             screenShake = 15;
@@ -830,10 +1279,27 @@ function updateEnemies() {
 
           // Check for level up
           checkLevelUp();
+        } else {
+          // Play hit sound for non-fatal hits
+          playSound("hit");
+
+          // Show damage indicator for larger enemies
+          if (enemy.type === "destroyer" || enemy.type === "mothership") {
+            // Add flash effect to enemy
+            enemy.flashTimer = 5;
+
+            // Show damage number
+            showDamageIndicator(bullet.x, bullet.y, damage);
+          }
         }
 
         break;
       }
+    }
+
+    // Update enemy flash timer if it has one
+    if (enemy.flashTimer > 0) {
+      enemy.flashTimer--;
     }
   }
 }
@@ -959,6 +1425,9 @@ function checkLevelUp() {
     enemySpawnRate = Math.max(30, enemySpawnRate - 10);
     gameSpeed += 0.1;
 
+    // Play level up sound
+    playSound("levelUp");
+
     // Update level display with animation
     const levelDisplay = document.getElementById("level-display");
     levelDisplay.textContent = `Level: ${level}`;
@@ -1045,6 +1514,14 @@ function updateHighScoreDisplay() {
 // Game over
 function gameOver() {
   gameActive = false;
+
+  // Stop background music
+  if (soundBuffers.backgroundMusic && soundBuffers.backgroundMusic.stop) {
+    soundBuffers.backgroundMusic.stop();
+  }
+
+  // Play game over sound
+  playSound("gameOver");
 
   // Check for high score
   const isNewHighScore = checkHighScore();
@@ -1143,6 +1620,682 @@ function addToCombo() {
   updateCombo();
 }
 
+// Boss definition
+const boss = {
+  x: 0,
+  y: -200,
+  width: 200,
+  height: 150,
+  speed: 2,
+  health: 500,
+  maxHealth: 500,
+  bullets: [],
+  active: false,
+  phase: 1,
+  attackTimer: 0,
+  attackCooldown: 60,
+  movementPattern: "entrance",
+  targetX: 0,
+  targetY: 0,
+  specialAttackTimer: 0,
+  specialAttackCooldown: 300,
+  invulnerable: false,
+  flashTimer: 0,
+
+  update() {
+    if (!this.active) return;
+
+    // Movement patterns
+    switch (this.movementPattern) {
+      case "entrance":
+        // Move down to enter the screen
+        if (this.y < 100) {
+          this.y += this.speed;
+        } else {
+          this.movementPattern = "side-to-side";
+          this.targetX = canvas.width / 2 - this.width / 2;
+        }
+        break;
+
+      case "side-to-side":
+        // Move side to side at the top of the screen
+        const dx = this.targetX - this.x;
+        this.x += dx * 0.05;
+
+        // Change direction when reaching target
+        if (Math.abs(dx) < 5) {
+          this.targetX = Math.random() * (canvas.width - this.width);
+        }
+        break;
+
+      case "charge":
+        // Charge toward player then return to top
+        if (this.y < canvas.height + 50) {
+          this.y += this.speed * 3;
+        } else {
+          this.y = -50;
+          this.x = Math.random() * (canvas.width - this.width);
+          this.movementPattern = "side-to-side";
+        }
+        break;
+
+      case "circle":
+        // Move in a circular pattern
+        const centerX = canvas.width / 2 - this.width / 2;
+        const centerY = canvas.height / 3;
+        const radius = canvas.width / 4;
+        const angle = gameFrame * 0.01;
+
+        this.x = centerX + Math.cos(angle) * radius;
+        this.y = centerY + Math.sin(angle) * radius;
+        break;
+    }
+
+    // Attack patterns based on phase - slower attack rates
+    this.attackTimer--;
+    if (this.attackTimer <= 0) {
+      this.attack();
+      // Longer cooldowns to give player breathing room
+      this.attackTimer = this.attackCooldown + Math.floor(Math.random() * 30); // Add randomness
+    }
+
+    // Special attack - much longer cooldowns
+    this.specialAttackTimer--;
+    if (this.specialAttackTimer <= 0) {
+      this.specialAttack();
+      // Much longer cooldowns for special attacks
+      this.specialAttackTimer =
+        this.specialAttackCooldown + Math.floor(Math.random() * 60);
+    }
+
+    // Update bullets
+    for (let i = this.bullets.length - 1; i >= 0; i--) {
+      const bullet = this.bullets[i];
+
+      // Move bullet
+      bullet.x += bullet.vx;
+      bullet.y += bullet.vy;
+
+      // Remove bullets that go off screen
+      if (
+        bullet.x < -bullet.size ||
+        bullet.x > canvas.width + bullet.size ||
+        bullet.y < -bullet.size ||
+        bullet.y > canvas.height + bullet.size
+      ) {
+        this.bullets.splice(i, 1);
+        continue;
+      }
+
+      // Check for collision with player
+      if (
+        bullet.x - bullet.size < player.x + player.width &&
+        bullet.x + bullet.size > player.x &&
+        bullet.y - bullet.size < player.y + player.height &&
+        bullet.y + bullet.size > player.y
+      ) {
+        // Player hit by boss bullet
+        playerHealth -= bullet.damage;
+        updateHealthDisplay();
+        this.bullets.splice(i, 1);
+
+        // Add screen shake
+        screenShake = 5;
+
+        // Show damage effect
+        showDamageEffect();
+
+        // Check if player is dead
+        if (playerHealth <= 0) {
+          gameOver();
+        }
+      }
+    }
+
+    // Flash effect when taking damage
+    if (this.flashTimer > 0) {
+      this.flashTimer--;
+    }
+
+    // Phase transitions
+    if (this.phase === 1 && this.health <= this.maxHealth * 0.7) {
+      this.phase = 2;
+      this.attackCooldown = 60; // Increased from 45
+      this.specialAttackCooldown = 300; // Increased from 240
+      this.movementPattern = "circle";
+      createFloatingText(
+        "PHASE 2",
+        this.x + this.width / 2,
+        this.y,
+        "mothership"
+      );
+      screenShake = 15;
+
+      // Drop a health power-up to help player
+      const healthPowerUp = powerUpTypes.find((p) => p.name === "healthBoost");
+      if (healthPowerUp) {
+        powerUps.push({
+          x: Math.random() * (canvas.width - 30),
+          y: canvas.height / 2,
+          width: 30,
+          height: 30,
+          speed: 2,
+          color: healthPowerUp.color,
+          type: healthPowerUp.name,
+          effect: healthPowerUp.effect,
+          duration: healthPowerUp.duration || 0,
+        });
+      }
+    } else if (this.phase === 2 && this.health <= this.maxHealth * 0.3) {
+      this.phase = 3;
+      this.attackCooldown = 45; // Increased from 30
+      this.specialAttackCooldown = 240; // Increased from 180
+      this.movementPattern = "side-to-side";
+      createFloatingText(
+        "FINAL PHASE",
+        this.x + this.width / 2,
+        this.y,
+        "mothership"
+      );
+      screenShake = 20;
+
+      // Drop another power-up to help player
+      const randomType =
+        powerUpTypes[Math.floor(Math.random() * powerUpTypes.length)];
+      powerUps.push({
+        x: Math.random() * (canvas.width - 30),
+        y: canvas.height / 2,
+        width: 30,
+        height: 30,
+        speed: 2,
+        color: randomType.color,
+        type: randomType.name,
+        effect: randomType.effect,
+        duration: randomType.duration || 0,
+      });
+    }
+  },
+
+  draw() {
+    if (!this.active) return;
+
+    // Draw boss with flash effect when hit
+    if (this.flashTimer % 6 < 3) {
+      ctx.fillStyle = "#ff0000";
+    } else {
+      ctx.fillStyle = "#660000";
+    }
+
+    // Main body
+    ctx.beginPath();
+    ctx.moveTo(this.x + this.width / 2, this.y);
+    ctx.lineTo(this.x + this.width, this.y + this.height * 0.4);
+    ctx.lineTo(this.x + this.width * 0.8, this.y + this.height * 0.6);
+    ctx.lineTo(this.x + this.width, this.y + this.height);
+    ctx.lineTo(this.x, this.y + this.height);
+    ctx.lineTo(this.x + this.width * 0.2, this.y + this.height * 0.6);
+    ctx.lineTo(this.x, this.y + this.height * 0.4);
+    ctx.closePath();
+    ctx.fill();
+
+    // Core
+    ctx.fillStyle = "#ffcc00";
+    ctx.beginPath();
+    ctx.arc(
+      this.x + this.width / 2,
+      this.y + this.height / 2,
+      30,
+      0,
+      Math.PI * 2
+    );
+    ctx.fill();
+
+    // Energy field
+    ctx.strokeStyle = `hsl(${gameFrame % 360}, 100%, 50%)`;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(
+      this.x + this.width / 2,
+      this.y + this.height / 2,
+      40 + Math.sin(gameFrame * 0.1) * 5,
+      0,
+      Math.PI * 2
+    );
+    ctx.stroke();
+
+    // Weapon pods
+    ctx.fillStyle = "#cc0000";
+
+    // Left weapon
+    ctx.beginPath();
+    ctx.arc(
+      this.x + this.width * 0.2,
+      this.y + this.height * 0.3,
+      15,
+      0,
+      Math.PI * 2
+    );
+    ctx.fill();
+
+    // Right weapon
+    ctx.beginPath();
+    ctx.arc(
+      this.x + this.width * 0.8,
+      this.y + this.height * 0.3,
+      15,
+      0,
+      Math.PI * 2
+    );
+    ctx.fill();
+
+    // Bottom weapon
+    ctx.beginPath();
+    ctx.arc(
+      this.x + this.width / 2,
+      this.y + this.height * 0.8,
+      15,
+      0,
+      Math.PI * 2
+    );
+    ctx.fill();
+
+    // Draw boss bullets
+    this.bullets.forEach((bullet) => {
+      ctx.fillStyle = bullet.color;
+
+      // Add glow effect
+      ctx.shadowColor = bullet.color;
+      ctx.shadowBlur = 10;
+
+      // Draw bullet based on type
+      if (bullet.type === "laser") {
+        // Draw laser beam
+        ctx.beginPath();
+        ctx.moveTo(bullet.startX, bullet.startY);
+        ctx.lineTo(bullet.x, bullet.y);
+        ctx.lineWidth = bullet.size;
+        ctx.strokeStyle = bullet.color;
+        ctx.stroke();
+      } else {
+        // Draw regular bullet
+        ctx.beginPath();
+        ctx.arc(bullet.x, bullet.y, bullet.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Reset shadow
+      ctx.shadowBlur = 0;
+    });
+  },
+
+  attack() {
+    // Different attack patterns based on phase
+    switch (this.phase) {
+      case 1:
+        // Phase 1: Basic spread shot with fewer bullets
+        this.spreadShot(5, 2.5, 8, 5, "#ff3333"); // Reduced speed
+        break;
+
+      case 2:
+        // Phase 2: Faster spread shot + aimed shot but more manageable
+        this.spreadShot(5, 3, 10, 7, "#ff6600"); // Reduced count and speed
+        if (Math.random() > 0.5) {
+          // Only 50% chance to add aimed shot
+          this.aimedShot(1, 6, 8, "#ff0000"); // Reduced count and speed
+        }
+        break;
+
+      case 3:
+        // Phase 3: Multiple attack types but more balanced
+        const attackType = Math.floor(Math.random() * 3);
+
+        if (attackType === 0) {
+          this.spreadShot(7, 4, 10, 10, "#ff0000"); // Reduced count
+        } else if (attackType === 1) {
+          this.spiralShot(10, 7, 6, "#ff3300"); // Reduced count and speed
+        } else {
+          this.aimedShot(2, 8, 10, "#ff0066"); // Reduced count
+        }
+        break;
+    }
+  },
+
+  specialAttack() {
+    // Special attacks based on phase
+    switch (this.phase) {
+      case 1:
+        // Phase 1: Line of bullets with gap
+        this.lineShot(16, 5, 8, "#ff9900"); // Reduced count and speed
+        break;
+
+      case 2:
+        // Phase 2: Spiral pattern with reasonable density
+        this.spiralShot(18, 6, 8, "#ff00ff"); // Reduced count and speed
+        break;
+
+      case 3:
+        // Phase 3: Charge attack with bullet hell but with warning
+        this.chargeAttack();
+        break;
+    }
+  },
+
+  spreadShot(count, speed, size, damage, color) {
+    // Create spread of bullets
+    const angleStep = Math.PI / (count - 1);
+
+    for (let i = 0; i < count; i++) {
+      const angle = -Math.PI / 2 - Math.PI / 4 + angleStep * i;
+      const vx = Math.cos(angle) * speed;
+      const vy = Math.sin(angle) * speed;
+
+      this.bullets.push({
+        x: this.x + this.width / 2,
+        y: this.y + this.height,
+        vx,
+        vy,
+        size,
+        damage,
+        color,
+        type: "normal",
+      });
+    }
+  },
+
+  aimedShot(count, speed, damage, color) {
+    // Shoot directly at player
+    for (let i = 0; i < count; i++) {
+      // Calculate angle to player
+      const dx = player.x + player.width / 2 - (this.x + this.width / 2);
+      const dy = player.y + player.height / 2 - (this.y + this.height / 2);
+      const angle = Math.atan2(dy, dx);
+
+      // Add slight spread for multiple bullets
+      const spreadAngle = angle + (Math.random() - 0.5) * 0.3;
+
+      const vx = Math.cos(spreadAngle) * speed;
+      const vy = Math.sin(spreadAngle) * speed;
+
+      this.bullets.push({
+        x: this.x + this.width / 2,
+        y: this.y + this.height / 2,
+        vx,
+        vy,
+        size: 10,
+        damage,
+        color,
+        type: "normal",
+      });
+    }
+  },
+
+  spiralShot(count, speed, damage, color) {
+    // Create spiral of bullets with more manageable density
+    const angleStep = (Math.PI * 2) / count;
+    const startAngle = gameFrame * 0.05;
+
+    for (let i = 0; i < count; i++) {
+      const angle = startAngle + angleStep * i;
+      const vx = Math.cos(angle) * speed;
+      const vy = Math.sin(angle) * speed;
+
+      this.bullets.push({
+        x: this.x + this.width / 2,
+        y: this.y + this.height / 2,
+        vx,
+        vy,
+        size: 8,
+        damage,
+        color,
+        type: "normal",
+      });
+    }
+  },
+
+  lineShot(count, speed, damage, color) {
+    // Create line of bullets across the screen with gaps for the player to dodge through
+    const gapPosition = Math.floor(Math.random() * (count - 4)) + 2; // Random gap position
+    const gapWidth = 2; // Width of the gap (number of bullets to skip)
+
+    for (let i = 0; i < count; i++) {
+      // Skip bullets to create a gap
+      if (i >= gapPosition && i < gapPosition + gapWidth) {
+        continue;
+      }
+
+      const xPos = (canvas.width / (count - 1)) * i;
+
+      this.bullets.push({
+        x: xPos,
+        y: this.y + this.height,
+        vx: 0,
+        vy: speed,
+        size: 8,
+        damage,
+        color,
+        type: "normal",
+      });
+    }
+
+    // Create a visual indicator for the gap
+    createFloatingText(
+      "→",
+      (canvas.width / (count - 1)) * (gapPosition + gapWidth / 2),
+      this.y + this.height + 30,
+      "mothership"
+    );
+  },
+
+  chargeAttack() {
+    // Show warning before charge
+    createFloatingText(
+      "⚠️ CHARGE ATTACK ⚠️",
+      canvas.width / 2,
+      canvas.height / 2,
+      "mothership"
+    );
+
+    // Give player time to react
+    setTimeout(() => {
+      // Change movement pattern to charge
+      this.movementPattern = "charge";
+      this.targetY = canvas.height + 100;
+
+      // Create warning effect
+      screenShake = 10;
+
+      // Create bullets in all directions but with a pattern that can be dodged
+      const bulletCount = 12; // Reduced from 16
+      const angleStep = (Math.PI * 2) / bulletCount;
+
+      for (let i = 0; i < bulletCount; i++) {
+        const angle = angleStep * i;
+        const vx = Math.cos(angle) * 4;
+        const vy = Math.sin(angle) * 4;
+
+        this.bullets.push({
+          x: this.x + this.width / 2,
+          y: this.y + this.height / 2,
+          vx,
+          vy,
+          size: 10, // Slightly smaller
+          damage: 15,
+          color: "#ff0000",
+          type: "normal",
+        });
+      }
+    }, 1000); // 1 second warning
+  },
+
+  takeDamage(amount) {
+    if (this.invulnerable) return;
+
+    this.health -= amount;
+    this.flashTimer = 30;
+
+    // Update boss health bar
+    updateBossHealthBar();
+
+    // Check if boss is defeated
+    if (this.health <= 0) {
+      this.defeat();
+    }
+  },
+
+  defeat() {
+    // Create multiple explosions
+    for (let i = 0; i < 20; i++) {
+      setTimeout(() => {
+        const x = this.x + Math.random() * this.width;
+        const y = this.y + Math.random() * this.height;
+        createExplosion(x, y);
+        screenShake = 15;
+      }, i * 100);
+    }
+
+    // Add score
+    const pointsEarned = 1000 * level;
+    score += pointsEarned;
+    updateScoreDisplay();
+
+    // Show floating text
+    createFloatingText(
+      `+${pointsEarned}`,
+      this.x + this.width / 2,
+      this.y,
+      "mothership"
+    );
+    createFloatingText(
+      "BOSS DEFEATED!",
+      canvas.width / 2,
+      canvas.height / 2,
+      "mothership"
+    );
+
+    // Reset boss
+    this.active = false;
+    bossActive = false;
+
+    // Hide boss health bar
+    document.getElementById("boss-container").style.display = "none";
+
+    // Drop multiple power-ups
+    for (let i = 0; i < 3; i++) {
+      const randomType =
+        powerUpTypes[Math.floor(Math.random() * powerUpTypes.length)];
+      powerUps.push({
+        x: this.x + (this.width / 4) * (i + 1),
+        y: this.y + this.height / 2,
+        width: 30,
+        height: 30,
+        speed: 2,
+        color: randomType.color,
+        type: randomType.name,
+        effect: randomType.effect,
+        duration: randomType.duration || 0,
+      });
+    }
+
+    // Final explosion
+    setTimeout(() => {
+      createExplosion(this.x + this.width / 2, this.y + this.height / 2, 100);
+      screenShake = 30;
+    }, 2000);
+  },
+};
+
+// Update boss health bar
+function updateBossHealthBar() {
+  const healthPercent = (boss.health / boss.maxHealth) * 100;
+  document.getElementById("boss-health-bar").style.width = `${healthPercent}%`;
+
+  // Change color based on health
+  const bossHealthBar = document.getElementById("boss-health-bar");
+  if (healthPercent > 60) {
+    bossHealthBar.style.background =
+      "linear-gradient(to right, #ff0000, #ff3333)";
+  } else if (healthPercent > 30) {
+    bossHealthBar.style.background =
+      "linear-gradient(to right, #ff3300, #ff6600)";
+  } else {
+    bossHealthBar.style.background =
+      "linear-gradient(to right, #ff0000, #990000)";
+  }
+}
+
+// Start boss encounter
+function startBossEncounter() {
+  // Play boss warning sound
+  playSound("bossWarning");
+
+  // Show warning
+  const warning = document.querySelector(".boss-warning");
+  warning.style.display = "block";
+  screenShake = 10;
+
+  // Clear all enemies and bullets
+  enemies.length = 0;
+
+  // Set timer to start boss after warning
+  setTimeout(() => {
+    warning.style.display = "none";
+
+    // Activate boss
+    boss.active = true;
+    bossActive = true;
+    boss.x = canvas.width / 2 - boss.width / 2;
+    boss.y = -boss.height;
+    boss.health = boss.maxHealth = 250 * level; // Reduced from 500 * level
+    boss.phase = 1;
+    boss.attackTimer = boss.attackCooldown;
+    boss.specialAttackTimer = boss.specialAttackCooldown;
+    boss.movementPattern = "entrance";
+    boss.bullets = [];
+    boss.flashTimer = 0;
+    boss.invulnerable = false;
+
+    // Show boss health bar
+    document.getElementById("boss-container").style.display = "flex";
+    updateBossHealthBar();
+  }, 3000);
+}
+
+// Check for boss spawn
+function checkBossSpawn() {
+  // Spawn boss every 5 levels
+  if (level % 5 === 0 && !bossActive && !bossWarningActive) {
+    bossWarningActive = true;
+    startBossEncounter();
+  }
+}
+
+// Check for collision with player bullets
+function checkBulletCollisions() {
+  // Check for collision with boss
+  if (bossActive) {
+    for (let j = player.bullets.length - 1; j >= 0; j--) {
+      const bullet = player.bullets[j];
+
+      if (
+        bullet.x < boss.x + boss.width &&
+        bullet.x + bullet.width > boss.x &&
+        bullet.y < boss.y + boss.height &&
+        bullet.y + bullet.height > boss.y
+      ) {
+        // Boss hit by bullet
+        const damage = player.powerUps.doubleDamage.active ? 4 : 2; // Increased base damage and double damage effect
+        boss.takeDamage(damage);
+
+        // Remove bullet
+        player.bullets.splice(j, 1);
+
+        // Add to combo
+        addToCombo();
+      }
+    }
+  }
+}
+
 // Reset game variables
 function resetGame() {
   score = 0;
@@ -1165,15 +2318,22 @@ function resetGame() {
   comboTimer = 0;
   comboMultiplier = 1;
   screenShake = 0;
+  bossActive = false;
+  bossWarningActive = false;
+  boss.active = false;
+  boss.bullets = [];
 
   // Reset UI indicators
   document.getElementById("rapid-fire-indicator").classList.remove("active");
   document.getElementById("double-damage-indicator").classList.remove("active");
+  document.getElementById("health-boost-indicator").classList.remove("active");
   document.getElementById("combo-display").style.display = "none";
   document.getElementById("level-display").textContent = `Level: ${level}`;
   document.getElementById("level-display").classList.remove("level-up");
   document.getElementById("damage-overlay").classList.remove("active");
   document.getElementById("low-health-effect").classList.remove("active");
+  document.getElementById("boss-container").style.display = "none";
+  document.querySelector(".boss-warning").style.display = "none";
 
   // Update displays
   updateScoreDisplay();
@@ -1190,13 +2350,19 @@ function gameLoop() {
   // Update combo
   updateCombo();
 
-  // Spawn enemies
-  if (gameFrame % enemySpawnRate === 0) {
+  // Check for boss spawn
+  checkBossSpawn();
+
+  // Spawn enemies (only if boss is not active)
+  if (!bossActive && gameFrame % enemySpawnRate === 0) {
     createEnemy();
   }
 
-  // Spawn power-ups
-  if (gameFrame % powerUpSpawnRate === 0) {
+  // Spawn power-ups (less frequently during boss)
+  if (
+    gameFrame % (bossActive ? powerUpSpawnRate * 2 : powerUpSpawnRate) ===
+    0
+  ) {
     createPowerUp();
   }
 
@@ -1208,9 +2374,12 @@ function gameLoop() {
   updatePlayerBullets();
   drawPlayerBullets();
 
-  // Update and draw enemies
+  // Update and draw enemies or boss
   updateEnemies();
   drawEnemies();
+
+  // Check bullet collisions with boss
+  checkBulletCollisions();
 
   // Update and draw power-ups
   updatePowerUps();
@@ -1241,11 +2410,20 @@ document.getElementById("start-button").addEventListener("click", () => {
   // Hide start screen
   document.getElementById("start-screen").style.display = "none";
 
+  // Initialize sounds
+  SoundManager.init();
+
   // Reset game
   resetGame();
 
   // Start game
   gameActive = true;
+
+  // Start background music
+  if (soundEnabled) {
+    SoundManager.play("backgroundMusic");
+  }
+
   gameLoop();
 });
 
@@ -1253,11 +2431,20 @@ document.getElementById("restart-button").addEventListener("click", () => {
   // Hide game over screen
   document.getElementById("game-over").style.display = "none";
 
+  // Initialize sounds again
+  SoundManager.init();
+
   // Reset game
   resetGame();
 
   // Start game
   gameActive = true;
+
+  // Start background music
+  if (soundEnabled) {
+    SoundManager.play("backgroundMusic");
+  }
+
   gameLoop();
 });
 
@@ -1267,6 +2454,11 @@ document.getElementById("reset-high-score").addEventListener("click", () => {
 
   // Update high score message
   document.getElementById("high-score-message").style.display = "none";
+});
+
+// Sound toggle button
+document.getElementById("sound-toggle").addEventListener("click", () => {
+  SoundManager.toggle();
 });
 
 // Keyboard controls
@@ -1286,6 +2478,9 @@ window.addEventListener("keydown", (e) => {
       break;
     case " ":
       if (gameActive) player.shoot();
+      break;
+    case "m": // Toggle sound with 'm' key
+      SoundManager.toggle();
       break;
   }
 });
@@ -1313,6 +2508,9 @@ createBackgroundStars();
 
 // Load high score when the game starts
 loadHighScore();
+
+// Initialize sound system
+SoundManager.init();
 
 // Resize canvas when window resizes
 window.addEventListener("resize", () => {
