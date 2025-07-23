@@ -472,6 +472,10 @@ const player = {
       active: false,
       timer: 0,
     },
+    shield: {
+      active: false,
+      timer: 0,
+    },
   },
   shootCooldown: 0,
   maxShootCooldown: 15,
@@ -553,6 +557,36 @@ const player = {
       );
       ctx.stroke();
     }
+
+    if (this.powerUps.shield.active) {
+      // Draw shield bubble
+      const shieldProgress =
+        this.powerUps.shield.timer / powerUpTypes[3].duration;
+      ctx.strokeStyle = "rgba(0, 191, 255, 0.7)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(
+        this.x + this.width / 2,
+        this.y + this.height / 2,
+        40,
+        0,
+        Math.PI * 2
+      );
+      ctx.stroke();
+
+      // Add pulsing shield effect
+      ctx.fillStyle =
+        "rgba(0, 191, 255, " + (0.2 + Math.sin(gameFrame * 0.1) * 0.1) + ")";
+      ctx.beginPath();
+      ctx.arc(
+        this.x + this.width / 2,
+        this.y + this.height / 2,
+        40,
+        0,
+        Math.PI * 2
+      );
+      ctx.fill();
+    }
   },
   update() {
     // Movement
@@ -589,6 +623,15 @@ const player = {
         document
           .getElementById("double-damage-indicator")
           .classList.remove("active");
+      }
+    }
+
+    if (this.powerUps.shield.active) {
+      this.powerUps.shield.timer--;
+      document.getElementById("shield-indicator").classList.add("active");
+      if (this.powerUps.shield.timer <= 0) {
+        this.powerUps.shield.active = false;
+        document.getElementById("shield-indicator").classList.remove("active");
       }
     }
   },
@@ -753,6 +796,29 @@ const powerUpTypes = [
       );
     },
   },
+  {
+    name: "shield",
+    color: "rgba(0, 191, 255, 0.7)",
+    duration: 600,
+    effect() {
+      player.powerUps.shield.active = true;
+      player.powerUps.shield.timer = this.duration;
+
+      // Show indicator
+      document.getElementById("shield-indicator").classList.add("active");
+
+      // Play power-up sound
+      playSound("powerup");
+
+      // Visual feedback that power-up is activated
+      createFloatingText(
+        "SHIELD ACTIVATED!",
+        player.x + player.width / 2,
+        player.y - 20,
+        "mothership"
+      );
+    },
+  },
 ];
 
 // Create initial stars
@@ -831,7 +897,7 @@ function createPowerUp() {
     y: -30,
     width: 30,
     height: 30,
-    speed: 2,
+    speed: 2, // All power-ups should have a speed
     color: randomType.color,
     type: randomType.name,
     effect: randomType.effect,
@@ -1156,9 +1222,29 @@ function updateEnemies() {
         bullet.y + bullet.height > player.y
       ) {
         // Player hit by enemy bullet
+        enemy.bullets.splice(j, 1);
+
+        // If shield is active, absorb the damage
+        if (player.powerUps.shield.active) {
+          // Visual effect to show shield absorbing damage
+          createFloatingText(
+            "BLOCKED!",
+            player.x + player.width / 2,
+            player.y - 20,
+            "scout"
+          );
+
+          // Play hit sound
+          playSound("hit");
+
+          // Small screen shake
+          screenShake = 2;
+          continue;
+        }
+
+        // No shield, take damage
         playerHealth -= 10;
         updateHealthDisplay();
-        enemy.bullets.splice(j, 1);
 
         // Add screen shake
         screenShake = 5;
@@ -1193,7 +1279,41 @@ function updateEnemies() {
       enemy.y < player.y + player.height &&
       enemy.y + enemy.height > player.y
     ) {
-      // Player collided with enemy
+      // If shield is active, destroy the enemy without taking damage
+      if (player.powerUps.shield.active) {
+        // Create explosion
+        createExplosion(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
+
+        // Play explosion sound
+        playSound("explosion");
+
+        // Add screen shake
+        screenShake = 5;
+
+        // Add points with combo multiplier
+        const pointsEarned = Math.round(enemy.points * comboMultiplier);
+        score += pointsEarned;
+
+        // Show floating score text
+        createFloatingText(
+          `+${pointsEarned}`,
+          enemy.x + enemy.width / 2,
+          enemy.y,
+          enemy.type
+        );
+
+        // Increment combo
+        addToCombo();
+
+        updateScoreDisplay();
+
+        // Remove enemy
+        enemies.splice(i, 1);
+
+        continue;
+      }
+
+      // No shield, take damage
       playerHealth -= 20;
       updateHealthDisplay();
 
@@ -1308,6 +1428,7 @@ function updateEnemies() {
 function updatePowerUps() {
   for (let i = powerUps.length - 1; i >= 0; i--) {
     const powerUp = powerUps[i];
+    // All power-ups should move downwards
     powerUp.y += powerUp.speed * gameSpeed;
 
     // Remove power-ups that go off screen
@@ -1641,6 +1762,7 @@ const boss = {
   specialAttackCooldown: 300,
   invulnerable: false,
   flashTimer: 0,
+  gapIndicators: [],
 
   update() {
     if (!this.active) return;
@@ -1926,6 +2048,31 @@ const boss = {
       // Reset shadow
       ctx.shadowBlur = 0;
     });
+
+    // Draw gap indicators
+    if (this.gapIndicators && this.gapIndicators.length > 0) {
+      for (let i = this.gapIndicators.length - 1; i >= 0; i--) {
+        const indicator = this.gapIndicators[i];
+
+        // Draw safe zone indicator
+        ctx.fillStyle = `rgba(0, 255, 0, ${indicator.alpha})`;
+        ctx.beginPath();
+        ctx.moveTo(indicator.x, indicator.y);
+        ctx.lineTo(indicator.x - 20, indicator.y + 40);
+        ctx.lineTo(indicator.x + 20, indicator.y + 40);
+        ctx.closePath();
+        ctx.fill();
+
+        // Update indicator
+        indicator.timer--;
+        indicator.alpha = indicator.timer / 30;
+
+        // Remove expired indicators
+        if (indicator.timer <= 0) {
+          this.gapIndicators.splice(i, 1);
+        }
+      }
+    }
   },
 
   attack() {
@@ -2057,33 +2204,54 @@ const boss = {
     const gapPosition = Math.floor(Math.random() * (count - 4)) + 2; // Random gap position
     const gapWidth = 2; // Width of the gap (number of bullets to skip)
 
-    for (let i = 0; i < count; i++) {
-      // Skip bullets to create a gap
-      if (i >= gapPosition && i < gapPosition + gapWidth) {
-        continue;
-      }
+    // Create a visual indicator for the gap BEFORE the bullets appear
+    const gapX = (canvas.width / (count - 1)) * (gapPosition + gapWidth / 2);
+    const gapIndicator = {
+      x: gapX,
+      y: this.y + this.height,
+      alpha: 1,
+      timer: 30, // Show indicator for 30 frames (half a second)
+    };
 
-      const xPos = (canvas.width / (count - 1)) * i;
-
-      this.bullets.push({
-        x: xPos,
-        y: this.y + this.height,
-        vx: 0,
-        vy: speed,
-        size: 8,
-        damage,
-        color,
-        type: "normal",
-      });
+    // Add the indicator to a new array for tracking
+    if (!this.gapIndicators) {
+      this.gapIndicators = [];
     }
+    this.gapIndicators.push(gapIndicator);
 
     // Create a visual indicator for the gap
     createFloatingText(
-      "→",
-      (canvas.width / (count - 1)) * (gapPosition + gapWidth / 2),
+      "SAFE ZONE",
+      gapX,
       this.y + this.height + 30,
       "mothership"
     );
+
+    // Create arrow indicator pointing to the gap
+    createFloatingText("↓", gapX, this.y + this.height + 60, "mothership");
+
+    // Delay the actual bullet creation to give player time to react
+    setTimeout(() => {
+      for (let i = 0; i < count; i++) {
+        // Skip bullets to create a gap
+        if (i >= gapPosition && i < gapPosition + gapWidth) {
+          continue;
+        }
+
+        const xPos = (canvas.width / (count - 1)) * i;
+
+        this.bullets.push({
+          x: xPos,
+          y: this.y + this.height,
+          vx: 0,
+          vy: speed,
+          size: 8,
+          damage,
+          color,
+          type: "normal",
+        });
+      }
+    }, 1000); // 1 second warning
   },
 
   chargeAttack() {
@@ -2172,9 +2340,20 @@ const boss = {
       "mothership"
     );
 
+    // Inform player that bosses return every 5 levels
+    setTimeout(() => {
+      createFloatingText(
+        "BOSSES APPEAR EVERY 5 LEVELS",
+        canvas.width / 2,
+        canvas.height / 2 + 40,
+        "mothership"
+      );
+    }, 1500);
+
     // Reset boss
     this.active = false;
     bossActive = false;
+    bossWarningActive = false; // Allow boss to spawn again when reaching next 5th level
 
     // Hide boss health bar
     document.getElementById("boss-container").style.display = "none";
@@ -2245,7 +2424,7 @@ function startBossEncounter() {
     bossActive = true;
     boss.x = canvas.width / 2 - boss.width / 2;
     boss.y = -boss.height;
-    boss.health = boss.maxHealth = 250 * level; // Reduced from 500 * level
+    boss.health = boss.maxHealth = 40 * level;
     boss.phase = 1;
     boss.attackTimer = boss.attackCooldown;
     boss.specialAttackTimer = boss.specialAttackCooldown;
@@ -2313,6 +2492,8 @@ function resetGame() {
   player.powerUps.rapidFire.timer = 0;
   player.powerUps.doubleDamage.active = false;
   player.powerUps.doubleDamage.timer = 0;
+  player.powerUps.shield.active = false;
+  player.powerUps.shield.timer = 0;
   player.maxShootCooldown = 15;
   combo = 0;
   comboTimer = 0;
@@ -2327,6 +2508,7 @@ function resetGame() {
   document.getElementById("rapid-fire-indicator").classList.remove("active");
   document.getElementById("double-damage-indicator").classList.remove("active");
   document.getElementById("health-boost-indicator").classList.remove("active");
+  document.getElementById("shield-indicator").classList.remove("active");
   document.getElementById("combo-display").style.display = "none";
   document.getElementById("level-display").textContent = `Level: ${level}`;
   document.getElementById("level-display").classList.remove("level-up");
